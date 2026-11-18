@@ -334,9 +334,24 @@ class CureLatch(gl.Contract):
         self.total_pending_withdrawals = self.total_pending_withdrawals + u256(amount)
 
     # -------------------------------------------------------------------------
-    # Covenant Creation & Round 1: Notice of Defect
+    # Payable Escrow Deposit & Covenant Creation (Round 1: Notice of Defect)
     # -------------------------------------------------------------------------
     @gl.public.write.payable
+    def deposit_escrow(self) -> int:
+        """
+        Deposits native wei into caller's isolated withdrawable escrow balance.
+        Separating payable deposits from covenant/notice validation prevents
+        GenVM UserError reverts from stranding attached native value.
+        """
+        attached = int(gl.message.value)
+        if attached <= 0:
+            raise gl.vm.UserError("ZERO_DEPOSIT")
+        caller = _norm_addr(gl.message.sender_address)
+        self.total_deposited = self.total_deposited + u256(attached)
+        self._credit_pending(caller, attached)
+        return int(self.pending_withdrawals.get(caller, u256(0)))
+
+    @gl.public.write
     def open_covenant(
         self,
         covenant_id: str,
@@ -349,8 +364,8 @@ class CureLatch(gl.Contract):
         canonical_repo_prefix: str,
     ) -> str:
         """
-        Supplier opens a bilateral wafer-lot fabrication covenant and deposits `performance_bond`.
-        Freezes buyer identity, ceiling cure terms, and canonical commit-pinned repo prefix.
+        Supplier opens a bilateral wafer-lot fabrication covenant by locking `performance_bond`
+        from their deposited escrow balance.
         """
         if int(self.covenants_count) >= MAX_COVENANTS:
             raise gl.vm.UserError("MAX_COVENANTS_EXCEEDED")
@@ -377,9 +392,9 @@ class CureLatch(gl.Contract):
         ):
             raise gl.vm.UserError("INVALID_BOND_AMOUNT")
 
-        attached = int(gl.message.value)
-        if attached != performance_bond:
-            raise gl.vm.UserError("INVALID_ATTACHED_VALUE")
+        supplier_bal = int(self.pending_withdrawals.get(supplier, u256(0)))
+        if supplier_bal < performance_bond:
+            raise gl.vm.UserError("INSUFFICIENT_ESCROW_BALANCE")
 
         if (
             isinstance(cure_indemnity_bps, bool)
@@ -456,12 +471,13 @@ class CureLatch(gl.Contract):
         self.covenant_ids_json = json.dumps(ids)
         self.covenants[covenant_id] = json.dumps(record, sort_keys=True)
         self.covenants_count = self.covenants_count + u256(1)
-        self.total_deposited = self.total_deposited + u256(attached)
-        self.total_locked_bonds = self.total_locked_bonds + u256(attached)
+        self.pending_withdrawals[supplier] = u256(supplier_bal - performance_bond)
+        self.total_pending_withdrawals = self.total_pending_withdrawals - u256(performance_bond)
+        self.total_locked_bonds = self.total_locked_bonds + u256(performance_bond)
 
         return f"COVENANT_OPENED:{covenant_id}:REQ_STAKE_{req_stake}"
 
-    @gl.public.write.payable
+    @gl.public.write
     def file_defect_notice(
         self,
         covenant_id: str,
@@ -471,8 +487,8 @@ class CureLatch(gl.Contract):
         defect_content_hash: str,
     ) -> str:
         """
-        Buyer files Round 1 notice of alleged fabrication defect with ceiling >=10% inspection stake
-        and an immutable commit-pinned telemetry URL inside `canonical_repo_prefix`.
+        Buyer files Round 1 notice of alleged fabrication defect by locking >=10% inspection stake
+        from their deposited escrow balance and pinning telemetry under `canonical_repo_prefix`.
         """
         raw_cov = self.covenants.get(covenant_id, "")
         if not raw_cov:
@@ -498,9 +514,9 @@ class CureLatch(gl.Contract):
         ):
             raise gl.vm.UserError("INVALID_STAKE_AMOUNT")
 
-        attached = int(gl.message.value)
-        if attached != inspection_stake:
-            raise gl.vm.UserError("INVALID_ATTACHED_VALUE")
+        buyer_bal = int(self.pending_withdrawals.get(caller, u256(0)))
+        if buyer_bal < inspection_stake:
+            raise gl.vm.UserError("INSUFFICIENT_ESCROW_BALANCE")
 
         req_stake = int(cov["required_stake"])
         bond = int(cov["performance_bond"])
@@ -530,8 +546,9 @@ class CureLatch(gl.Contract):
         cov["unwind_deadline"] = int(cov["notice_deadline"]) + ADJUDICATION_GRACE_SECONDS
 
         self.covenants[covenant_id] = json.dumps(cov, sort_keys=True)
-        self.total_deposited = self.total_deposited + u256(attached)
-        self.total_locked_stakes = self.total_locked_stakes + u256(attached)
+        self.pending_withdrawals[caller] = u256(buyer_bal - inspection_stake)
+        self.total_pending_withdrawals = self.total_pending_withdrawals - u256(inspection_stake)
+        self.total_locked_stakes = self.total_locked_stakes + u256(inspection_stake)
 
         return f"NOTICE_FILED:{covenant_id}:STAKE_{inspection_stake}"
 

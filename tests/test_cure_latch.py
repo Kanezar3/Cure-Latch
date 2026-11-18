@@ -111,9 +111,16 @@ def setup_standard_llm() -> None:
     mock_llm_responses.append(handler)
 
 
+def _deposit(contract: CureLatch, sender: str, amount: int) -> None:
+    set_sender(sender)
+    set_value(amount)
+    contract.deposit_escrow()
+    set_value(0)
+
+
 def _open_standard_covenant(contract: CureLatch, cov_id: str = "cov_a1") -> None:
+    _deposit(contract, ADDR_SUPPLIER, 1000)
     set_sender(ADDR_SUPPLIER)
-    set_value(1000)
     res = contract.open_covenant(
         cov_id,
         ADDR_BUYER,
@@ -125,7 +132,6 @@ def _open_standard_covenant(contract: CureLatch, cov_id: str = "cov_a1") -> None
         REPO_PREFIX,
     )
     assert res == f"COVENANT_OPENED:{cov_id}:REQ_STAKE_100"
-    set_value(0)
 
 
 # =============================================================================
@@ -139,8 +145,8 @@ def test_happy_path_two_round_breach_latched_and_cure_verified():
 
     _open_standard_covenant(c, "cov_a1")
 
+    _deposit(c, ADDR_BUYER, 100)
     set_sender(ADDR_BUYER)
-    set_value(100)
     assert (
         c.file_defect_notice(
             "cov_a1",
@@ -151,7 +157,6 @@ def test_happy_path_two_round_breach_latched_and_cure_verified():
         )
         == "NOTICE_FILED:cov_a1:STAKE_100"
     )
-    set_value(0)
 
     # Round 1 (permissionless auditor)
     set_sender(ADDR_AUDITOR)
@@ -215,8 +220,8 @@ def test_round1_rejected_no_breach_slashes_frivolous_buyer_stake():
     set_time(1794900000)
     _open_standard_covenant(c, "cov_b2")
 
+    _deposit(c, ADDR_BUYER, 100)
     set_sender(ADDR_BUYER)
-    set_value(100)
     c.file_defect_notice(
         "cov_b2",
         100,
@@ -224,7 +229,6 @@ def test_round1_rejected_no_breach_slashes_frivolous_buyer_stake():
         URL_B2_COMPLIANT,
         hashes["b2_compliant"],
     )
-    set_value(0)
 
     set_sender(ADDR_AUDITOR)
     assert c.adjudicate_defect_notice("cov_b2") == "ROUND1:cov_b2:REJECTED_NO_BREACH:LOT_WITHIN_TOLERANCE"
@@ -252,8 +256,8 @@ def test_round2_cure_deficient_regression_awards_bond_to_buyer():
     set_time(1794900000)
     _open_standard_covenant(c, "cov_c3")
 
+    _deposit(c, ADDR_BUYER, 100)
     set_sender(ADDR_BUYER)
-    set_value(100)
     c.file_defect_notice(
         "cov_c3",
         100,
@@ -261,7 +265,6 @@ def test_round2_cure_deficient_regression_awards_bond_to_buyer():
         URL_A1_DEFECT,
         hashes["a1_defect"],
     )
-    set_value(0)
     c.adjudicate_defect_notice("cov_c3")
 
     set_sender(ADDR_SUPPLIER)
@@ -295,10 +298,9 @@ def test_retriable_unverifiable_in_both_rounds_and_safe_unwind():
 
     # Round 1: Transient HTTP 503 fails soft as UNVERIFIABLE, recovers on Attempt 2
     _open_standard_covenant(c, "cov_retry")
+    _deposit(c, ADDR_BUYER, 100)
     set_sender(ADDR_BUYER)
-    set_value(100)
     c.file_defect_notice("cov_retry", 100, "Overlay shift.", URL_A1_DEFECT, hashes["a1_defect"])
-    set_value(0)
 
     saved_resp = mock_web_responses[URL_A1_DEFECT]
     mock_web_responses[URL_A1_DEFECT] = MockWebResponse(status=503, body=b"Upstream Timeout")
@@ -394,10 +396,9 @@ def test_verdict_reason_compatibility_tables_and_adversarial_leader_rejection():
     c = CureLatch()
     set_time(1794900000)
     _open_standard_covenant(c, "cov_adv")
+    _deposit(c, ADDR_BUYER, 100)
     set_sender(ADDR_BUYER)
-    set_value(100)
     c.file_defect_notice("cov_adv", 100, "Overlay shift.", URL_A1_DEFECT, hashes["a1_defect"])
-    set_value(0)
 
     def spoof_reason(leader_res: dict) -> dict:
         tampered = dict(leader_res)
@@ -425,29 +426,35 @@ def test_ceiling_stake_rounding_and_input_validation_guards():
     set_time(1794900000)
     set_sender(ADDR_SUPPLIER)
 
-    # Wrong attached value reverts atomically (contract_balance remains 0!)
-    set_value(50)
-    with pytest.raises(UserError, match="INVALID_ATTACHED_VALUE"):
+    # Zero-value deposit reverts
+    set_value(0)
+    with pytest.raises(UserError, match="ZERO_DEPOSIT"):
+        c.deposit_escrow()
+
+    # Insufficient escrow balance reverts without mutating state
+    with pytest.raises(UserError, match="INSUFFICIENT_ESCROW_BALANCE"):
         c.open_covenant("cov_1", ADDR_BUYER, 100, 1500, 600, 600, TECH_SPEC, REPO_PREFIX)
     assert int(c.balance) == 0
 
-    # Bool disguised as int / self-dealing buyer / zero address / bad bps revert cleanly
-    set_value(101)
+    # Deposit 101 wei into escrow, then test input bounds guards (escrow stays intact!)
+    _deposit(c, ADDR_SUPPLIER, 101)
+    set_sender(ADDR_SUPPLIER)
     with pytest.raises(UserError, match="INVALID_BOND_AMOUNT"):
         c.open_covenant("cov_b", ADDR_BUYER, True, 1500, 600, 600, TECH_SPEC, REPO_PREFIX)
     with pytest.raises(UserError, match="BUYER_CANNOT_BE_SUPPLIER"):
         c.open_covenant("cov_s", ADDR_SUPPLIER, 101, 1500, 600, 600, TECH_SPEC, REPO_PREFIX)
     with pytest.raises(UserError, match="INVALID_BUYER_ADDRESS"):
         c.open_covenant("cov_z", ZERO_ADDRESS, 101, 1500, 600, 600, TECH_SPEC, REPO_PREFIX)
-    assert int(c.balance) == 0
+    assert int(c.balance) == 101
 
     # Open with 101 bond -> required_stake must be ceiling 11, NOT 10
     assert c.open_covenant("cov_ceil", ADDR_BUYER, 101, 1500, 600, 600, TECH_SPEC, REPO_PREFIX) == "COVENANT_OPENED:cov_ceil:REQ_STAKE_11"
+    _deposit(c, ADDR_BUYER, 10)
     set_sender(ADDR_BUYER)
-    set_value(10)
     with pytest.raises(UserError, match="INSUFFICIENT_INSPECTION_STAKE"):
         c.file_defect_notice("cov_ceil", 10, "Overlay shift.", URL_A1_DEFECT, "a" * 64)
-    assert int(c.balance) == 101  # No swallowed stake from failed tx
+    assert int(c.balance) == 111
+    assert c.get_pending_payout(ADDR_BUYER) == 10  # Buyer's 10 wei remains withdrawable!
 
 
 # =============================================================================
@@ -462,16 +469,13 @@ def test_unauthorized_callers_and_conclusive_immutability_guards():
 
     # Non-buyer cannot file defect notice
     set_sender(ADDR_ATTACKER)
-    set_value(100)
     with pytest.raises(UserError, match="UNAUTHORIZED_CALLER"):
         c.file_defect_notice("cov_auth", 100, "Spoof notice.", URL_A1_DEFECT, hashes["a1_defect"])
-    set_value(0)
 
     # Buyer files properly
+    _deposit(c, ADDR_BUYER, 100)
     set_sender(ADDR_BUYER)
-    set_value(100)
     c.file_defect_notice("cov_auth", 100, "Overlay shift.", URL_A1_DEFECT, hashes["a1_defect"])
-    set_value(0)
 
     # Cannot tender cure before Round 1 concludes
     set_sender(ADDR_SUPPLIER)
@@ -510,8 +514,8 @@ def test_repo_prefix_binding_and_round2_anti_replay_guards():
     set_time(1794900000)
     _open_standard_covenant(c, "cov_bind")
 
+    _deposit(c, ADDR_BUYER, 100)
     set_sender(ADDR_BUYER)
-    set_value(100)
 
     # Unpinned /main/ URL rejected
     with pytest.raises(UserError, match="INVALID_EVIDENCE_URL"):
@@ -538,7 +542,6 @@ def test_repo_prefix_binding_and_round2_anti_replay_guards():
 
     # Valid notice & Round 1 latch
     c.file_defect_notice("cov_bind", 100, "Overlay shift.", URL_A1_DEFECT, hashes["a1_defect"])
-    set_value(0)
     c.adjudicate_defect_notice("cov_bind")
 
     # Round 2 rejects foreign repo URL and replaying Round 1's evidence URL or hash
@@ -566,12 +569,13 @@ def test_fail_closed_evidence_errors_and_no_block_time():
     c = CureLatch()
 
     # Fail closed on missing GenVM timestamp
+    _deposit(c, ADDR_SUPPLIER, 1000)
     set_time(None)
     set_sender(ADDR_SUPPLIER)
-    set_value(1000)
     with pytest.raises(UserError, match="NO_BLOCK_TIME"):
         c.open_covenant("cov_notime", ADDR_BUYER, 1000, 1500, 1800, 3600, TECH_SPEC, REPO_PREFIX)
-    assert int(c.balance) == 0
+    assert c.get_pending_payout(ADDR_SUPPLIER) == 1000
+    assert c.withdraw_payout() == 1000
 
     set_time(1794900000)
     bad_cases = [
@@ -585,10 +589,9 @@ def test_fail_closed_evidence_errors_and_no_block_time():
     for cov_id, url, resp, h, expected_reason in bad_cases:
         mock_web_responses[url] = resp
         _open_standard_covenant(c, cov_id)
+        _deposit(c, ADDR_BUYER, 100)
         set_sender(ADDR_BUYER)
-        set_value(100)
         c.file_defect_notice(cov_id, 100, "Edge test.", url, h)
-        set_value(0)
         res = c.adjudicate_defect_notice(cov_id)
         assert res == f"ROUND1:{cov_id}:UNVERIFIABLE:{expected_reason}"
         assert json.loads(c.get_covenant(cov_id))["status"] == "NOTICE_FILED"
@@ -629,10 +632,9 @@ def test_post_deadline_expiries_and_accounting_conservation_invariant():
 
     # Covenant 2: Defect noticed & latched, Supplier fails to cure before cure_deadline
     _open_standard_covenant(c, "cov_exp2")
+    _deposit(c, ADDR_BUYER, 100)
     set_sender(ADDR_BUYER)
-    set_value(100)
     c.file_defect_notice("cov_exp2", 100, "Overlay defect.", URL_A1_DEFECT, hashes["a1_defect"])
-    set_value(0)
     c.adjudicate_defect_notice("cov_exp2")
     assert_conservation()
 
