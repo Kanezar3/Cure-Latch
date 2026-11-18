@@ -1,0 +1,15 @@
+{
+  "lot_id": "WAFER-LOT-2026-B2",
+  "process_node": "3nm Gate-All-Around (GAA)",
+  "inspection_tool": "KLA Archer 800 EUV Overlay & Electrical Wafer Test",
+  "telemetry_status": "Verified incoming QA metrology and inline parametric probe export.",
+  "measurements": {
+    "euv_overlay_alignment_error_nm": 0.71,
+    "euv_overlay_spec_max_nm": 1.2,
+    "metal1_bridge_shorts_per_die": 0,
+    "metal1_bridge_shorts_spec_max": 0,
+    "thermal_dopant_activation_pct": 96.1,
+    "dopant_activation_spec_min_pct": 94.0
+  },
+  "engineering_finding": "Full lot inspection shows every parametric metric strictly within contractual fabrication tolerances: 0.71 nm EUV overlay error (<= 1.2 nm limit), zero interconnect bridge shorts, and 96.1% thermal dopant activation (>= 94.0% minimum)."
+}

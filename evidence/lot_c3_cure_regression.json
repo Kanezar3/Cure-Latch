@@ -1,0 +1,15 @@
+{
+  "lot_id": "WAFER-LOT-2026-C3",
+  "process_node": "3nm Gate-All-Around (GAA)",
+  "corrective_action": "High-temperature laser spike thermal re-anneal attempting mask stress relaxation without stage recalibration.",
+  "telemetry_status": "Verified post-rework KLA SEM defect scan and wafer probe log.",
+  "post_cure_measurements": {
+    "euv_overlay_alignment_error_nm": 0.95,
+    "euv_overlay_spec_max_nm": 1.2,
+    "metal1_bridge_shorts_per_die": 14,
+    "metal1_bridge_shorts_spec_max": 0,
+    "thermal_dopant_activation_pct": 95.8,
+    "dopant_activation_spec_min_pct": 94.0
+  },
+  "engineering_finding": "Although laser spike heating shifted EUV overlay to 0.95 nm, excessive thermal excursion ruptured dielectric spacers in Metal-1 routing and caused 14 interconnect bridge short circuits per die against a strict limit of 0 shorts."
+}

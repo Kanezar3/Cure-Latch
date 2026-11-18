@@ -1,0 +1,15 @@
+{
+  "lot_id": "WAFER-LOT-2026-A1",
+  "process_node": "3nm Gate-All-Around (GAA)",
+  "corrective_action": "ASML Twinscan NXE wafer stage chuck recalibration followed by Metal-0/Via-0 resist strip and re-patterning on Reticle Field R4-C2.",
+  "telemetry_status": "Verified post-rework KLA Archer 800 & electrical test export.",
+  "post_cure_measurements": {
+    "euv_overlay_alignment_error_nm": 0.68,
+    "euv_overlay_spec_max_nm": 1.2,
+    "metal1_bridge_shorts_per_die": 0,
+    "metal1_bridge_shorts_spec_max": 0,
+    "thermal_dopant_activation_pct": 95.3,
+    "dopant_activation_spec_min_pct": 94.0
+  },
+  "engineering_finding": "Corrective stage recalibration and re-patterning lowered EUV lithography overlay error from 2.4 nm down to 0.68 nm, well within the 1.2 nm requirement. Electrical probe confirms zero interconnect bridge shorts and stable 95.3% dopant activation with no side-effect degradation."
+}

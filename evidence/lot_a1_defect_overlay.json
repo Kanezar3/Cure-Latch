@@ -1,0 +1,15 @@
+{
+  "lot_id": "WAFER-LOT-2026-A1",
+  "process_node": "3nm Gate-All-Around (GAA)",
+  "inspection_tool": "KLA Archer 800 EUV Overlay & SEM Metrology",
+  "telemetry_status": "Verified fab tool log SHA digest and signed QA metrology export.",
+  "measurements": {
+    "euv_overlay_alignment_error_nm": 2.4,
+    "euv_overlay_spec_max_nm": 1.2,
+    "defect_location": "Metal-0 / Via-0 EUV Scanner Stage Field R4-C2",
+    "metal1_bridge_shorts_per_die": 0,
+    "thermal_dopant_activation_pct": 95.4,
+    "dopant_activation_spec_min_pct": 94.0
+  },
+  "engineering_finding": "Wafers exhibit an isolated 2.4 nm EUV lithography overlay misalignment in Metal-0/Via-0 at Field R4-C2, double the 1.2 nm ceiling. Interconnect bridge count and thermal anneal dopant activation remain nominal."
+}
