@@ -1,0 +1,13 @@
+{
+  "network": "studionet",
+  "chain_id": 61999,
+  "runner": "py-genlayer:1jb45aa8ynh2a9c9xn3b7qqh8sm5q93hwfp7jqmwsfhh8jpz09h6",
+  "probe_address": "0xBF468F9D4ab40640F8Af807D5365514a3E76caaB",
+  "deploy_tx": "0x73c0a992a1c2847dfefcf25c3221c339266d9fa57c10469d57790c58ee68b0e2",
+  "deploy_status": "FINALIZED",
+  "deploy_leader_exec": "SUCCESS",
+  "write_tx": "0x2dbd40d89e2b6cd3a7cbc7805ec0996d3001c482a61b4ef75ef27cfb114bd858",
+  "write_status": "FINALIZED",
+  "write_leader_exec": "SUCCESS",
+  "read_val": "probe_ok"
+}
